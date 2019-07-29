@@ -49,7 +49,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <setjmp.h>
-#include <signal.h>
+//#include <signal.h>
 #include <math.h>
 
 struct obj
@@ -95,8 +95,8 @@ int nointerrupt = 1;
 struct obj *symbolp(struct obj *x);
 void close_open_files(void);
 void repl_driver(void);
-void handle_sigfpe(int sig,int code, struct sigcontext *scp);
-void handle_sigint(int sig,int code, struct sigcontext *scp);
+int handle_sigfpe();
+int handle_sigint();
 void repl(void);
 void err(char *message, struct obj *x);
 void init_storage(void);
@@ -314,8 +314,6 @@ void repl_driver(void)
      k = setjmp(errjmp);
      if (k == 2) 
           return;
-     signal(SIGFPE,handle_sigfpe);
-     signal(SIGINT,handle_sigint);
      close_open_files();
      errjmp_ok = 1;
      nointerrupt = 0;
@@ -360,20 +358,7 @@ double myruntime(){long x;long time();time(&x);return(x);}
 #endif
 #endif
 
-void handle_sigfpe(int sig,int code, struct sigcontext *scp)
- 
-{
-     signal(SIGFPE,handle_sigfpe);
-     err("floating point exception",NIL);
-}
 
-void handle_sigint(int sig,int code, struct sigcontext *scp)
-{
-     signal(SIGINT,handle_sigint);
-     if (nointerrupt == 0) 
-          err("control-c interrupt",NIL);
-     printf("interrupts disabled\n");
-}
  
 void repl(void) 
 {
