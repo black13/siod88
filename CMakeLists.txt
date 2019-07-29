@@ -4,4 +4,4 @@ cmake_minimum_required(VERSION 3.5)
 project (siod)
 
 # Add an executable
-add_executable(siod siod.c)
+add_executable(siod siod.c getopt.c)

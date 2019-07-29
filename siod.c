@@ -51,7 +51,7 @@
 #include <setjmp.h>
 //#include <signal.h>
 #include <math.h>
-
+#include "getopt.h"
 struct obj
 {short gc_mark;
  short type;
@@ -271,9 +271,29 @@ scan_registers()
      unbound_marker = gc_relocate(unbound_marker);
 }
 
+struct option opts[] = {
+  {"init", required_argument, 0, 'i'},
+  {"help", optional_argument, 0, 'h'},
+  {0, 0, 0, 0}
+};
+
+
 int main(int argc,char *argv[])
 {
-	printf("Welcome to SIOD, Scheme In One Defun, Version 1.3\n");
+     int opt;
+
+     while ((opt = getopt_long(argc, argv, "i:h::", opts, NULL)) != -1) {
+          switch (opt) {
+               case 'i':
+               init_file = optarg;
+                    break;
+               case 'h':
+                    break;
+               default:
+                    break;
+      }
+  }
+     printf("Welcome to SIOD, Scheme In One Defun, Version 1.3\n");
 	printf("(C) Copyright 1988, George Carrette\n");
 	process_cla(argc,argv);
 	printf("heap_size = %d cells, %d bytes\n",heap_size,heap_size*sizeof(struct obj));
@@ -281,6 +301,7 @@ int main(int argc,char *argv[])
 	printf("heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
      repl_driver();
 	printf("EXIT\n");
+     
 	return 0;
 }
 
@@ -301,7 +322,7 @@ void process_cla(int argc, char **argv)
                case 'h':
 	               heap_size = atol(&(argv[k][2])); break;
                case 'i':
-	               init_file = &(argv[k][2]); break;
+	               init_file = (char*)(argv[2]); break;
                default: 
                     printf("bad arg: %s\n",argv[k]);
           }
