@@ -51,6 +51,7 @@
 #include <setjmp.h>
 //#include <signal.h>
 #include <math.h>
+#include <stdlib.h>
 #include "getopt.h"
 struct obj
 {short gc_mark;
@@ -358,7 +359,6 @@ double myruntime(){times(&time_buffer);return(time_buffer.tms_utime/60.0);}
 #endif
 #else
 #ifdef vms
-#include <stdlib.h>
 double myruntime(){return(clock() * 1.0e-2);}
 #include <descrip.h>
  struct obj *
