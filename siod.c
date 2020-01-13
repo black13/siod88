@@ -53,18 +53,44 @@
 #include <math.h>
 #include <stdlib.h>
 #include "getopt.h"
+
+#if 0
+#define debug() \
+do { \
+fprintf(stdout,"%s %s %d\n",__FILE__,__FUNCTION__,__LINE__);\
+} while(0) 
+#else
+#define debug() \
+do { \
+} while(0) 
+
+#endif
+
 struct obj
-{short gc_mark;
- short type;
- union {struct {struct obj * car;
-		struct obj * cdr;} cons;
-	struct {double data;} flonum;
+{
+     short gc_mark;
+     short type;
+     long  count;
+     union {
+          struct 
+          {
+               struct obj * car;
+		     struct obj * cdr;
+          } cons;
+	struct 
+     {
+          double data;
+     } flonum;
 	struct {char *pname;
 		struct obj * vcell;} symbol;
 	struct {char *name;
 		struct obj * (*f)();} subr;
-	struct {struct obj *env;
-		struct obj *code;} closure;}
+	struct {
+          struct obj *env;
+		struct obj *code;
+          } 
+          closure;
+          }
  storage_as;
 };
 
@@ -83,7 +109,7 @@ long old_heap_used;
 int which_heap;
 int gc_status_flag = 1;
 char *init_file = (char *) NULL;
-
+long count = 0;
 #define TKBUFFERN 100
 
 char tkbuffer[TKBUFFERN];
@@ -279,29 +305,98 @@ struct option opts[] = {
 };
 
 
+void dump()
+{    
+     debug();
+     struct obj *l,*pcdr,*pcar,*pcarcdr;
+     for(l=oblist;NNULLP(l);l=CDR(l))
+     {
+          fprintf(stdout,"%s\n",PNAME(CAR(l)));
+     }
+     fprintf(stdout," dump of heap \n");
+     for(l=heap_org; l < heap; ++l)
+     {
+          //fprintf(stdout,"type : %d\n",l->type);
+          switch TYPE(l)
+          {
+               case tc_nil:
+                    fprintf(stdout,"(%d)\n",l->count);
+               break;
+               case tc_cons:
+                    fprintf(stdout,"(cons cell:) %d -> ",l->count);
+                    pcar = CAR(l);
+                    if(pcar)
+                    {
+                         fprintf(stdout,"%d ",pcar->count);
+                    }
+                    pcdr = CDR(l);
+                    if(pcdr == NULL)
+                    {
+                         fprintf(stdout," null \n",pcar->count);
+                         
+                    }
+                    else
+                    {
+                        if(pcarcdr = CAR(pcdr))
+                         {
+                              fprintf(stdout,"%d\n",pcarcdr->count);
+                         }
+                    }
+                    
+                    break;
+               case tc_flonum:
+                    fprintf(stdout,"%g\n",FLONM(l));
+               break;
+               case tc_symbol:
+                    fprintf(stdout,"%d %s\n",l->count,PNAME(l));
+               break;
+               case tc_subr_0:
+               case tc_subr_1:
+               case tc_subr_2:
+               case tc_subr_3:
+               case tc_lsubr:
+               case tc_fsubr:
+               case tc_msubr:
+                    fprintf(stdout,"#<SUBR(%d) %s>\n",TYPE(l),(*l).storage_as.subr.name);
+               break;
+               case tc_closure:
+                    fprintf(stdout,"#<CLOSURE ");
+                    lprin1(car((*l).storage_as.closure.code));
+                    fprintf(stdout," ");
+                    lprin1(cdr((*l).storage_as.closure.code));
+                    fprintf(stdout,">\n");
+                    break;
+          }
+          fflush(stdout);
+	}
+     
+      
+}
+
 int main(int argc,char *argv[])
 {
+     debug();
+
      int opt;
 
-     while ((opt = getopt_long(argc, argv, "i:h::", opts, NULL)) != -1) {
-          switch (opt) {
-               case 'i':
-               init_file = optarg;
-                    break;
-               case 'h':
-                    break;
-               default:
-                    break;
-      }
-  }
-     printf("Welcome to SIOD, Scheme In One Defun, Version 1.3\n");
-	printf("(C) Copyright 1988, George Carrette\n");
-	process_cla(argc,argv);
-	printf("heap_size = %d cells, %d bytes\n",heap_size,heap_size*sizeof(struct obj));
+
+     fprintf(stdout,"Welcome to SIOD, Scheme In One Defun, Version 1.3\n");
+	fprintf(stdout,"(C) Copyright 1988, George Carrette\n");
+	
+     init_file = "siod.scm";
+     //process_cla(argc,argv);
+	fprintf(stdout,"heap_size = %d cells, %d bytes\n",heap_size,heap_size*sizeof(struct obj));
+     
+     fprintf(stdout,"heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
+
 	init_storage();
-	printf("heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
+
+     dump();
+
+	fprintf(stdout,"heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
+     lprint(heap_1);
      repl_driver();
-	printf("EXIT\n");
+	fprintf(stdout,"EXIT\n");
      
 	return 0;
 }
@@ -315,7 +410,7 @@ void process_cla(int argc, char **argv)
                continue;
           if (argv[k][0] != '-') 
           {
-               printf("bad arg: %s\n",argv[k]);
+               fprintf(stdout,"bad arg: %s\n",argv[k]);
                continue;
           }
           switch(argv[k][1])
@@ -325,7 +420,7 @@ void process_cla(int argc, char **argv)
                case 'i':
 	               init_file = (char*)(argv[2]); break;
                default: 
-                    printf("bad arg: %s\n",argv[k]);
+                    fprintf(stdout,"bad arg: %s\n",argv[k]);
           }
      }
 }
@@ -391,17 +486,17 @@ void repl(void)
           {
                rt = myruntime();
                gc();
-               printf("GC took %g seconds, %d compressed to %d, %d free\n",
+               fprintf(stdout,"GC took %g seconds, %d compressed to %d, %d free\n",
              myruntime()-rt,old_heap_used,heap-heap_org,heap_end-heap);
           }
-          printf("> ");
+          fprintf(stdout,"> ");
           x = lread();
           if EQ(x,eof_val) 
                break;
           rt = myruntime();
           cw = heap;
           x = leval(x,NIL);
-          printf("Evaluation took %g seconds %d cons work\n",
+          fprintf(stdout,"Evaluation took %g seconds %d cons work\n",
 	     myruntime()-rt,heap-cw);
           lprint(x);
      }
@@ -411,10 +506,10 @@ void err(char *message, struct obj *x)
 {
     nointerrupt = 1;
     if NNULLP(x) 
-        printf("ERROR: %s (see errobj)\n",message);
-    else printf("ERROR: %s\n",message);
+        fprintf(stdout,"ERROR: %s (see errobj)\n",message);
+    else fprintf(stdout,"ERROR: %s\n",message);
     if (errjmp_ok == 1) {setvar(sym_errobj,x,NIL); longjmp(errjmp,1);}
-    printf("FATAL ERROR DURING STARTUP OR CRITICAL CODE SECTION\n");
+    fprintf(stdout,"FATAL ERROR DURING STARTUP OR CRITICAL CODE SECTION\n");
     exit(1);
 }
 
@@ -428,12 +523,14 @@ struct obj *lerr(struct obj *message,struct obj*x)
 
 struct obj *cons( struct obj *x,struct obj*y)
 {
+     debug();
     register struct obj *z;
     if ((z = heap) >= heap_end) 
         err("ran out of storage",NIL);
     heap = z+1;
     (*z).gc_mark = 0;
     (*z).type = tc_cons;
+    (*z).count = count++;
     CAR(z) = x;
     CDR(z) = y;
     return(z);
@@ -441,7 +538,8 @@ struct obj *cons( struct obj *x,struct obj*y)
 
 struct obj *consp(struct obj *x)
 {
-    if TYPEP(x,tc_cons) return(truth); 
+    if TYPEP(x,tc_cons) 
+     return(truth); 
     else return(NIL);
 }
 
@@ -512,7 +610,7 @@ struct obj * plus(struct obj *x,struct obj *y)
      return(flocons(FLONM(x)+FLONM(y)));
 }
 
- struct obj *ltimes(struct obj *x,struct obj *y)
+struct obj *ltimes(struct obj *x,struct obj *y)
 {
      if NTYPEP(x,tc_flonum) 
           err("wta(1st) to times",x);
@@ -562,10 +660,13 @@ struct obj * greaterp(struct obj *x,struct obj *y)
 }
 
  struct obj *eq(struct obj *x,struct obj*y)
- 
-{if EQ(x,y) return(truth); else return(NIL);}
+ {
+     if EQ(x,y) 
+          return(truth); 
+     else return(NIL);
+}
 
- struct obj *eql(struct obj *x,struct obj*y)
+struct obj *eql(struct obj *x,struct obj*y)
 {
     if EQ(x,y) 
          return(truth); 
@@ -577,6 +678,7 @@ struct obj * greaterp(struct obj *x,struct obj *y)
 
 struct obj *symcons(char *pname, struct obj *vcell)
 {
+    debug();
     register struct obj *z;
     if ((z = heap) >= heap_end) 
          err("ran out of storage",NIL);
@@ -585,6 +687,7 @@ struct obj *symcons(char *pname, struct obj *vcell)
     (*z).type = tc_symbol;
     PNAME(z) = pname;
     VCELL(z) = vcell;
+    (*z).count = count++;
     return(z);
 }
 
@@ -625,6 +728,7 @@ struct obj *symbol_value(struct obj *x,struct obj*env)
 
 struct obj *cintern_soft( char *name)
 {    
+     debug();
      struct obj *l;
      for(l=oblist;NNULLP(l);l=CDR(l))
           if (strcmp(name,PNAME(CAR(l))) == 0) 
@@ -634,6 +738,7 @@ struct obj *cintern_soft( char *name)
 
 struct obj *cintern(char *name)
 {
+     debug();
      struct obj *sym;
           sym = cintern_soft(name);
      if(sym) 
@@ -643,8 +748,9 @@ struct obj *cintern(char *name)
      return(sym);
 }
 
- char *must_malloc(unsigned long size)
+char *must_malloc(unsigned long size)
 {
+     debug();
      char *tmp;
      tmp = (char *) malloc(size);
      if (tmp == (char *)NULL) err("failed to allocate storage from system",NIL);
@@ -653,6 +759,7 @@ struct obj *cintern(char *name)
 
 struct obj *rintern(char *name)
 {
+     debug();
      struct obj *sym;
      char *newname;
      sym = cintern_soft(name);
@@ -667,6 +774,7 @@ struct obj *rintern(char *name)
 
 struct obj *subrcons(int type, char *name, struct obj * (*f)()) 
 {
+     debug();
      register struct obj *z;
      if ((z = heap) >= heap_end) 
           err("ran out of storage",NIL);
@@ -680,6 +788,7 @@ struct obj *subrcons(int type, char *name, struct obj * (*f)())
 
 struct obj *closure(struct obj *env,struct obj *code)
 {
+     debug();
      register struct obj *z;
      if ((z = heap) >= heap_end) err("ran out of storage",NIL);
      heap = z+1;
@@ -690,11 +799,16 @@ struct obj *closure(struct obj *env,struct obj *code)
      return(z);
 }
 
+
 void init_storage(void)
 {
+     debug();
      int j;
      heap_1 = (struct obj *)must_malloc(sizeof(struct obj)*heap_size);
+     
      heap_2 = (struct obj *)must_malloc(sizeof(struct obj)*heap_size);
+     memset(heap_1, 0, sizeof(struct obj)*heap_size);
+     memset(heap_2, 0, sizeof(struct obj)*heap_size);
      heap = heap_1;
      which_heap = 1;
      heap_org = heap;
@@ -715,11 +829,13 @@ void init_storage(void)
  
 void init_subr(char *name, int type, struct obj *(*fcn)())
 {
-    setvar(cintern(name),subrcons(type,name,fcn),NIL);
+     debug();
+     setvar(cintern(name),subrcons(type,name,fcn),NIL);
 }
 
 struct obj * assq(struct obj *x,struct obj *alist)
 {
+    debug();
     register struct obj *l,*tmp;
     for(l=alist;TYPEP(l,tc_cons);l=CDR(l))
     {
@@ -732,6 +848,7 @@ struct obj * assq(struct obj *x,struct obj *alist)
 
 struct obj * gc_relocate(struct obj *x)
 {
+    debug();
     struct obj *newobj;
     if EQ(x,NIL) 
         return(NIL);
@@ -772,6 +889,7 @@ struct obj * gc_relocate(struct obj *x)
 
 struct obj *get_newspace()
 {
+     debug();
      struct obj * newspace;
      if (which_heap == 1)
      {
@@ -791,6 +909,7 @@ struct obj *get_newspace()
 
 void scan_newspace(struct obj  *newspace)
 {
+     debug();
      register struct obj *ptr;
      for(ptr=newspace; ptr < heap; ++ptr)
      {
@@ -812,6 +931,7 @@ void scan_newspace(struct obj  *newspace)
       
 void gc(void)
 {
+     debug();
      struct obj *newspace;
      errjmp_ok = 0;
      nointerrupt = 1;
@@ -825,17 +945,19 @@ void gc(void)
 
 struct obj *gc_status(struct obj *args)
 {
+     debug();
      if NNULLP(args) 
           if NULLP(car(args)) gc_status_flag = 0; else gc_status_flag = 1;
                if (gc_status_flag)
-                    printf("garbage collection is on\n"); else
-     printf("garbage collection is off\n");
-     printf("%d allocated %d free\n",heap - heap_org, heap_end - heap);
+                    fprintf(stdout,"garbage collection is on\n"); else
+     fprintf(stdout,"garbage collection is off\n");
+     fprintf(stdout,"%d allocated %d free\n",heap - heap_org, heap_end - heap);
      return(NIL);
 }
 
 struct obj *leval_args(struct obj *l,struct obj*env) 
 {
+     debug();
      struct obj *result,*v1,*v2,*tmp;
      if NULLP(l) return(NIL);
      if NTYPEP(l,tc_cons) 
@@ -853,12 +975,16 @@ struct obj *leval_args(struct obj *l,struct obj*env)
 }
 
 struct obj *extend_env(struct obj *actuals, struct obj *formals, struct obj *env)
-{if TYPEP(formals,tc_symbol)
-    return(cons(cons(cons(formals,NIL),cons(actuals,NIL)),env));
- return(cons(cons(formals,actuals),env));}
+{
+     debug();
+     if TYPEP(formals,tc_symbol)
+          return(cons(cons(cons(formals,NIL),cons(actuals,NIL)),env));
+     return(cons(cons(formals,actuals),env));
+ }
 
 struct obj *envlookup(struct obj *var, struct obj *env) 
 {
+     debug();
      struct obj *frame,*al,*fl,*tmp;
      for(frame=env;TYPEP(frame,tc_cons);frame=CDR(frame))
      {
@@ -878,6 +1004,7 @@ struct obj *envlookup(struct obj *var, struct obj *env)
 
 struct obj *leval( struct obj *x,struct obj*env)
 {
+     debug();
      struct obj *tmp;
      loop:
      switch TYPE(x)
@@ -926,20 +1053,25 @@ struct obj *leval( struct obj *x,struct obj*env)
 
 
 struct obj *setvar(struct obj *var,struct obj*val,struct obj*env)
-{struct obj *tmp;
- if NTYPEP(var,tc_symbol) err("wta(non-symbol) to setvar",var);
- tmp = envlookup(var,env);
- if NULLP(tmp) return(VCELL(var) = val);
- return(CAR(tmp)=val);}
+{
+     debug();
+     struct obj *tmp;
+     if NTYPEP(var,tc_symbol) err("wta(non-symbol) to setvar",var);
+     tmp = envlookup(var,env);
+     if NULLP(tmp) return(VCELL(var) = val);
+     return(CAR(tmp)=val);
+}
  
 
 struct obj *leval_setq(struct obj *args,struct obj*env)
 {
+     debug();
     return(setvar(car(args),leval(car(cdr(args)),env),env));
 }
 
  struct obj *syntax_define( struct obj *args)
 {
+     debug();
      if TYPEP(car(args),tc_symbol) 
           return(args);
      return(syntax_define(cons(car(car(args)),
@@ -1099,7 +1231,7 @@ struct obj *leval_tenv(struct obj *args,struct obj *env)
 struct obj *lprint(struct obj *exp)
 {
     lprin1(exp);
-    printf("\n");
+    fprintf(stdout,"\n");
     return(NIL);
 }
 
@@ -1109,23 +1241,23 @@ struct obj *lprin1(struct obj *exp)
      switch TYPE(exp)
      {
           case tc_nil:
-               printf("()");
+               fprintf(stdout,"()");
           break;
           case tc_cons:
-               printf("(");
+               fprintf(stdout,"(");
                lprin1(car(exp));
                for(tmp=cdr(exp);TYPEP(tmp,tc_cons);tmp=cdr(tmp))
 	          {
-                    printf(" ");lprin1(car(tmp));
+                    fprintf(stdout," ");lprin1(car(tmp));
                }
-               if NNULLP(tmp) {printf(" . ");lprin1(tmp);}
-               printf(")");
+               if NNULLP(tmp) {fprintf(stdout," . ");lprin1(tmp);}
+               fprintf(stdout,")");
                break;
           case tc_flonum:
-               printf("%g",FLONM(exp));
+               fprintf(stdout,"%g",FLONM(exp));
           break;
           case tc_symbol:
-               printf("%s",PNAME(exp));
+               fprintf(stdout,"%s",PNAME(exp));
           break;
           case tc_subr_0:
           case tc_subr_1:
@@ -1134,14 +1266,14 @@ struct obj *lprin1(struct obj *exp)
           case tc_lsubr:
           case tc_fsubr:
           case tc_msubr:
-               printf("#<SUBR(%d) %s>",TYPE(exp),(*exp).storage_as.subr.name);
+               fprintf(stdout,"#<SUBR(%d) %s>",TYPE(exp),(*exp).storage_as.subr.name);
           break;
           case tc_closure:
-               printf("#<CLOSURE ");
+               fprintf(stdout,"#<CLOSURE ");
                lprin1(car((*exp).storage_as.closure.code));
-               printf(" ");
+               fprintf(stdout," ");
                lprin1(cdr((*exp).storage_as.closure.code));
-               printf(">");
+               fprintf(stdout,">");
                break;
      }
      return(NIL);
@@ -1207,6 +1339,7 @@ struct obj *lreadr(FILE *f)
 
 struct obj *lreadparen(FILE *f)
 {
+     debug();
 	int c;
 	struct obj *tmp;
 	c = flush_ws(f,"end of file inside list");
@@ -1218,6 +1351,7 @@ struct obj *lreadparen(FILE *f)
 
 struct obj *lreadtk(int j)
 {
+     debug();
      int k;
      char c,*p;
      p = tkbuffer;
@@ -1252,12 +1386,14 @@ struct obj *lreadtk(int j)
       
 struct obj *copy_list(struct obj *x)
 {
+    debug();
     if NULLP(x) return(NIL);
     return(cons(car(x),copy_list(cdr(x))));
 }
 
 struct obj *oblistfn()
 {
+    debug();     
     return(copy_list(oblist));
 }
 
@@ -1270,7 +1406,7 @@ FILE *p;
         p = (FILE *) PNAME(car(l));
         if (p)
         {
-            printf("closing a file left open\n");
+            fprintf(stdout,"closing a file left open\n");
             fclose(p);
         }
     }
@@ -1282,13 +1418,13 @@ struct obj *vload(char *fname)
 {
     struct obj *sym,*form;
     FILE *f;
-    printf("loading %s\n",fname);
+    fprintf(stdout,"loading %s\n",fname);
     sym = symcons(0,NIL);
     open_files = cons(sym,open_files);
     PNAME(sym) = (char *) fopen(fname,"r");
     f = (FILE *) PNAME(sym);
     if (!f) {open_files = cdr(open_files);
-    printf("Could not open file\n");
+    fprintf(stdout,"Could not open file\n");
     return(NIL);}
     while(1)
     {
@@ -1298,7 +1434,7 @@ struct obj *vload(char *fname)
     }
     fclose(f);
     open_files = cdr(open_files);
-    printf("done.\n");
+    fprintf(stdout,"done.\n");
     return(truth);
 }
 
