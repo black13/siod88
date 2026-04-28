@@ -52,6 +52,7 @@
 //#include <signal.h>
 #include <math.h>
 #include <stdlib.h>
+#include <time.h>
 #include "getopt.h"
 
 #if 0
@@ -85,6 +86,7 @@ struct obj
 		struct obj * vcell;} symbol;
 	struct {char *name;
 		struct obj * (*f)();} subr;
+	struct {FILE *fp;} port;
 	struct {
           struct obj *env;
 		struct obj *code;
@@ -100,11 +102,12 @@ struct obj
 #define VCELL(x) ((*x).storage_as.symbol.vcell)
 #define SUBRF(x) (*((*x).storage_as.subr.f))
 #define FLONM(x) ((*x).storage_as.flonum.data)
+#define FILEPORT(x) ((*x).storage_as.port.fp)
 
 struct obj *heap_1;
 struct obj *heap_2;
 struct obj *heap,*heap_end,*heap_org;
-long heap_size = 5000;
+long heap_size = 200000;
 long old_heap_used;
 int which_heap;
 int gc_status_flag = 1;
@@ -285,7 +288,7 @@ struct obj *sym_quote = NIL;
 struct obj *open_files = NIL;
 struct obj *unbound_marker = NIL;
 
-scan_registers()
+void scan_registers(void)
 {
      oblist = gc_relocate(oblist);
      eof_val = gc_relocate(eof_val);
@@ -305,7 +308,7 @@ struct option opts[] = {
 };
 
 
-void dump()
+void dump(void)
 {    
      debug();
      struct obj *l,*pcdr,*pcar,*pcarcdr;
@@ -320,26 +323,26 @@ void dump()
           switch TYPE(l)
           {
                case tc_nil:
-                    fprintf(stdout,"(%d)\n",l->count);
+                    fprintf(stdout,"(%ld)\n",l->count);
                break;
                case tc_cons:
-                    fprintf(stdout,"(cons cell:) %d -> ",l->count);
+                    fprintf(stdout,"(cons cell:) %ld -> ",l->count);
                     pcar = CAR(l);
                     if(pcar)
                     {
-                         fprintf(stdout,"%d ",pcar->count);
+                         fprintf(stdout,"%ld ",pcar->count);
                     }
                     pcdr = CDR(l);
                     if(pcdr == NULL)
                     {
-                         fprintf(stdout," null \n",pcar->count);
+                         fprintf(stdout," null \n");
                          
                     }
                     else
                     {
-                        if(pcarcdr = CAR(pcdr))
+                        if((pcarcdr = CAR(pcdr)))
                          {
-                              fprintf(stdout,"%d\n",pcarcdr->count);
+                              fprintf(stdout,"%ld\n",pcarcdr->count);
                          }
                     }
                     
@@ -348,7 +351,7 @@ void dump()
                     fprintf(stdout,"%g\n",FLONM(l));
                break;
                case tc_symbol:
-                    fprintf(stdout,"%d %s\n",l->count,PNAME(l));
+                    fprintf(stdout,"%ld %s\n",l->count,PNAME(l));
                break;
                case tc_subr_0:
                case tc_subr_1:
@@ -377,23 +380,23 @@ int main(int argc,char *argv[])
 {
      debug();
 
-     int opt;
+     (void)argc;(void)argv;
 
 
      fprintf(stdout,"Welcome to SIOD, Scheme In One Defun, Version 1.3\n");
 	fprintf(stdout,"(C) Copyright 1988, George Carrette\n");
 	
-     init_file = "siod.scm";
+      init_file = "siod.scm";
      //process_cla(argc,argv);
-	fprintf(stdout,"heap_size = %d cells, %d bytes\n",heap_size,heap_size*sizeof(struct obj));
+	fprintf(stdout,"heap_size = %ld cells, %lu bytes\n",heap_size,(unsigned long)(heap_size*sizeof(struct obj)));
      
-     fprintf(stdout,"heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
+     fprintf(stdout,"heap_1 at %p, heap_2 at %p\n",(void*)heap_1,(void*)heap_2);
 
 	init_storage();
 
-     dump();
+//      dump();
 
-	fprintf(stdout,"heap_1 at 0x%X, heap_2 at 0x%X\n",heap_1,heap_2);
+ 	fprintf(stdout,"heap_1 at %p, heap_2 at %p\n",(void*)heap_1,(void*)heap_2);
      lprint(heap_1);
      repl_driver();
 	fprintf(stdout,"EXIT\n");
@@ -418,7 +421,7 @@ void process_cla(int argc, char **argv)
                case 'h':
 	               heap_size = atol(&(argv[k][2])); break;
                case 'i':
-	               init_file = (char*)(argv[2]); break;
+	               init_file = &(argv[k][2]); break;
                default: 
                     fprintf(stdout,"bad arg: %s\n",argv[k]);
           }
@@ -486,7 +489,7 @@ void repl(void)
           {
                rt = myruntime();
                gc();
-               fprintf(stdout,"GC took %g seconds, %d compressed to %d, %d free\n",
+                fprintf(stdout,"GC took %g seconds, %ld compressed to %ld, %ld free\n",
              myruntime()-rt,old_heap_used,heap-heap_org,heap_end-heap);
           }
           fprintf(stdout,"> ");
@@ -496,7 +499,7 @@ void repl(void)
           rt = myruntime();
           cw = heap;
           x = leval(x,NIL);
-          fprintf(stdout,"Evaluation took %g seconds %d cons work\n",
+           fprintf(stdout,"Evaluation took %g seconds %ld cons work\n",
 	     myruntime()-rt,heap-cw);
           lprint(x);
      }
@@ -524,7 +527,7 @@ struct obj *lerr(struct obj *message,struct obj*x)
 struct obj *cons( struct obj *x,struct obj*y)
 {
      debug();
-    register struct obj *z;
+    struct obj *z;
     if ((z = heap) >= heap_end) 
         err("ran out of storage",NIL);
     heap = z+1;
@@ -551,9 +554,10 @@ struct obj *car(struct obj *x)
                return(NIL);
           case tc_cons:
                return(CAR(x));
-          default:
-               err("wta to car",x);
-    }
+           default:
+                err("wta to car",x);
+                return(NIL);
+     }
 }
 
 struct obj *cdr( struct obj *x)
@@ -566,6 +570,7 @@ struct obj *cdr( struct obj *x)
       return(CDR(x));
     default:
       err("wta to cdr",x);
+      return(NIL);
     }
 }
 
@@ -585,7 +590,7 @@ struct obj *setcdr(struct obj *cell,struct obj *value)
 
 struct obj * flocons(double x)
 {
-     register struct obj *z;
+     struct obj *z;
      if ((z = heap) >= heap_end) 
           err("ran out of storage",NIL);
      heap = z+1;
@@ -679,7 +684,7 @@ struct obj *eql(struct obj *x,struct obj*y)
 struct obj *symcons(char *pname, struct obj *vcell)
 {
     debug();
-    register struct obj *z;
+    struct obj *z;
     if ((z = heap) >= heap_end) 
          err("ran out of storage",NIL);
     heap = z+1;
@@ -775,7 +780,7 @@ struct obj *rintern(char *name)
 struct obj *subrcons(int type, char *name, struct obj * (*f)()) 
 {
      debug();
-     register struct obj *z;
+     struct obj *z;
      if ((z = heap) >= heap_end) 
           err("ran out of storage",NIL);
      heap = z+1;
@@ -789,7 +794,7 @@ struct obj *subrcons(int type, char *name, struct obj * (*f)())
 struct obj *closure(struct obj *env,struct obj *code)
 {
      debug();
-     register struct obj *z;
+     struct obj *z;
      if ((z = heap) >= heap_end) err("ran out of storage",NIL);
      heap = z+1;
      (*z).gc_mark = 0;
@@ -803,7 +808,7 @@ struct obj *closure(struct obj *env,struct obj *code)
 void init_storage(void)
 {
      debug();
-     int j;
+//     int j;
      heap_1 = (struct obj *)must_malloc(sizeof(struct obj)*heap_size);
      
      heap_2 = (struct obj *)must_malloc(sizeof(struct obj)*heap_size);
@@ -836,20 +841,21 @@ void init_subr(char *name, int type, struct obj *(*fcn)())
 struct obj * assq(struct obj *x,struct obj *alist)
 {
     debug();
-    register struct obj *l,*tmp;
+    struct obj *l,*tmp;
     for(l=alist;TYPEP(l,tc_cons);l=CDR(l))
     {
         tmp = CAR(l);
-        if (TYPEP(tmp,init_subr) && EQ(CAR(tmp),x)) return(tmp);
+        if (TYPEP(tmp,tc_cons) && EQ(CAR(tmp),x)) return(tmp);
     }
     if EQ(l,NIL) return(NIL);
     err("improper list to assq",alist);
+    return(NIL);
 }
 
 struct obj * gc_relocate(struct obj *x)
 {
     debug();
-    struct obj *newobj;
+    struct obj *newobj = NULL;
     if EQ(x,NIL) 
         return(NIL);
     if ((*x).gc_mark == 1) 
@@ -910,7 +916,7 @@ struct obj *get_newspace()
 void scan_newspace(struct obj  *newspace)
 {
      debug();
-     register struct obj *ptr;
+     struct obj *ptr;
      for(ptr=newspace; ptr < heap; ++ptr)
      {
           switch TYPE(ptr)
@@ -946,12 +952,14 @@ void gc(void)
 struct obj *gc_status(struct obj *args)
 {
      debug();
-     if NNULLP(args) 
-          if NULLP(car(args)) gc_status_flag = 0; else gc_status_flag = 1;
-               if (gc_status_flag)
-                    fprintf(stdout,"garbage collection is on\n"); else
-     fprintf(stdout,"garbage collection is off\n");
-     fprintf(stdout,"%d allocated %d free\n",heap - heap_org, heap_end - heap);
+     if NNULLP(args) {
+         if NULLP(car(args)) gc_status_flag = 0; else gc_status_flag = 1;
+     }
+     if (gc_status_flag)
+         fprintf(stdout,"garbage collection is on\n");
+     else
+         fprintf(stdout,"garbage collection is off\n");
+     fprintf(stdout,"%ld allocated %ld free\n",heap - heap_org, heap_end - heap);
      return(NIL);
 }
 
@@ -1221,10 +1229,11 @@ al = NIL;
 }
    
 struct obj *leval_quote(struct obj *args,struct obj *env)
-{return(car(args));}
+{(void)env;return(car(args));}
 
 struct obj *leval_tenv(struct obj *args,struct obj *env)
 {
+    (void)args;
     return(env);
 }
 
@@ -1290,7 +1299,9 @@ int flush_ws(FILE *f,char *eoferr)
      while(1)
      {    
           c = getc(f);
-          if (c == EOF) if (eoferr) err(eoferr,NIL); else return(c);
+          if (c == EOF) {
+               if (eoferr) err(eoferr,NIL); else return(c);
+          }
           if (isspace(c)) 
                continue;
           return(c);
@@ -1334,7 +1345,8 @@ struct obj *lreadr(FILE *f)
           }
     *p++ = c;
      }
-     err("token larger than TKBUFFERN",NIL);
+      err("token larger than TKBUFFERN",NIL);
+      return(NIL);
 }
 
 struct obj *lreadparen(FILE *f)
@@ -1352,8 +1364,8 @@ struct obj *lreadparen(FILE *f)
 struct obj *lreadtk(int j)
 {
      debug();
-     int k;
-     char c,*p;
+//   int k;
+     char *p;
      p = tkbuffer;
      p[j] = 0;
      if (*p == '-') 
@@ -1403,7 +1415,7 @@ struct obj *l;
 FILE *p;
     for(l=open_files;NNULLP(l);l=cdr(l))
     {
-        p = (FILE *) PNAME(car(l));
+        p = FILEPORT(car(l));
         if (p)
         {
             fprintf(stdout,"closing a file left open\n");
@@ -1421,8 +1433,8 @@ struct obj *vload(char *fname)
     fprintf(stdout,"loading %s\n",fname);
     sym = symcons(0,NIL);
     open_files = cons(sym,open_files);
-    PNAME(sym) = (char *) fopen(fname,"r");
-    f = (FILE *) PNAME(sym);
+    FILEPORT(sym) = fopen(fname,"r");
+    f = FILEPORT(sym);
     if (!f) {open_files = cdr(open_files);
     fprintf(stdout,"Could not open file\n");
     return(NIL);}
